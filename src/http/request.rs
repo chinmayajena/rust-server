@@ -1,10 +1,11 @@
 //Here super means http module
-use super::method::Method;
+use super::method::{ Method, MethodError };
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{ Display, Formatter, Result as FmtResult, Debug };
 use std::str;
 use std::str::Utf8Error;
+
 pub struct Request {
     path: String,
     query_string: Option<String>,
@@ -27,13 +28,23 @@ impl TryFrom<&[u8]> for Request {
         }
 
         let (method, request) = get_next_word(request).ok_or(ParseError::InvalidRequest)?;
-        let (path, request) = get_next_word(request).ok_or(ParseError::InvalidRequest)?;
+        let (mut path, request) = get_next_word(request).ok_or(ParseError::InvalidRequest)?;
         let (protocol, _) = get_next_word(request).ok_or(ParseError::InvalidRequest)?;
 
         if protocol != "HTTP/1.1" {
             return Err(ParseError::InvalidProtocol);
         }
-        unimplemented!()
+
+        let method: Method = method.parse()?;
+
+        let mut query_string = None;
+
+        if let Some(i) = path.find('?') {
+            query_string = Some(path[i + 1..].to_string());
+            path = &path[..i];
+        }
+
+        Ok(Self { path: path.to_string(), query_string, method })
     }
 }
 
@@ -50,7 +61,7 @@ pub enum ParseError {
     InvalidRequest,
     InvalidEncoding,
     InvalidProtocol,
-    InvalidMethodError,
+    InvalidMethod,
 }
 
 impl ParseError {
@@ -61,6 +72,12 @@ impl ParseError {
             Self::InvalidProtocol => "Invalid Protocol",
             Self::InvalidMethodError => "Invalid MethodError",
         }
+    }
+}
+
+impl From<MethodError> for ParseError {
+    fn from(_: MethodError) -> Self {
+        Self::InvalidMethod
     }
 }
 
